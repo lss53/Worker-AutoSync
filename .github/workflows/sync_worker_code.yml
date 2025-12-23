@@ -20,12 +20,20 @@ jobs:
       - name: 检查版本并获取最新版本
         id: check_versions
         run: |
-          # 1. 获取最新正式版标签
-          LATEST_TAG=$(curl -s https://api.github.com/repos/bia-pain-bache/BPB-Worker-Panel/releases/latest | jq -r '.tag_name')
+          REPO="bia-pain-bache/BPB-Worker-Panel"
+          
+          # 1. 健壮获取最新正式版标签：获取所有 releases，筛选最新的非预发布版本
+          LATEST_TAG=$(curl -s "https://api.github.com/repos/$REPO/releases" \
+            | jq -r 'map(select(.prerelease == false and .draft == false)) | sort_by(.published_at) | .[-1].tag_name')
           
           if [ -z "$LATEST_TAG" ]; then
-            echo "::error::未找到最新正式发布版本，退出。"
-            exit 1
+            # Fallback 方案：如果筛选失败，尝试使用 /latest 端点 (它可能失败，但值得一试)
+            echo "::warning::使用筛选方式未找到最新正式发布版本，尝试使用 /latest 端点作为备选..."
+            LATEST_TAG=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | jq -r '.tag_name')
+            if [ -z "$LATEST_TAG" ]; then
+                echo "::error::所有尝试均失败，未找到任何正式发布版本，退出。"
+                exit 1
+            fi
           fi
           
           # 2. 获取本地版本
